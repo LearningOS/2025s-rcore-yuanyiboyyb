@@ -14,6 +14,8 @@ mod switch;
 #[allow(clippy::module_inception)]
 mod task;
 
+use core::usize;
+
 use crate::config::MAX_APP_NUM;
 use crate::loader::{get_num_app, init_app_cx};
 use crate::sync::UPSafeCell;
@@ -54,6 +56,7 @@ lazy_static! {
         let mut tasks = [TaskControlBlock {
             task_cx: TaskContext::zero_init(),
             task_status: TaskStatus::UnInit,
+            syscall_count:[0;5],
         }; MAX_APP_NUM];
         for (i, task) in tasks.iter_mut().enumerate() {
             task.task_cx = TaskContext::goto_restore(init_app_cx(i));
@@ -72,6 +75,42 @@ lazy_static! {
 }
 
 impl TaskManager {
+    ///add 1 when id syscall called
+    pub fn add_syscall(&self,id:usize){
+        let mut inner = self.inner.exclusive_access(); // 获取对 inner 的独占访问
+        for task in inner.tasks.iter_mut() {
+            if task.task_status == TaskStatus::Running {
+                match id {
+                    64 => task.syscall_count[0]+=1,
+                    93 => task.syscall_count[1]+=1,
+                    124 => task.syscall_count[2]+=1,
+                    169 => task.syscall_count[3]+=1,
+                    410 => task.syscall_count[4]+=1,
+                    _ =>{},
+                };
+            }
+        }
+    }
+    
+    /// return syscall id count
+    pub fn find_running_task(&self,id:usize) -> Option<isize> {
+        let inner = self.inner.exclusive_access(); // 获取对 inner 的独占访问
+        for task in inner.tasks.iter() {
+            if task.task_status == TaskStatus::Running {
+                let answer:Option<isize>= match id {
+                    64 => Some(task.syscall_count[0]),
+                    93 => Some(task.syscall_count[1]),
+                    124 => Some(task.syscall_count[2]),
+                    169 => Some(task.syscall_count[3]),
+                    410 => Some(task.syscall_count[4]),
+                    _ => None
+                };
+                return answer;
+            }
+        }
+        None // 如果没有找到状态为 Running 的任务，返回 None
+    }
+
     /// Run the first task in task list.
     ///
     /// Generally, the first task in task list is an idle task (we call it zero process later).
