@@ -353,7 +353,7 @@ impl MapArea {
     pub fn munmap(&mut self,page_table: &mut PageTable){
         for  vpn in VPNRange::new(self.vpn_range.get_start(),self.vpn_range.get_end()){
             self.unmap_one(page_table,vpn);
-        } 
+        }
     }
     #[allow(unused)]
     pub fn shrink_to(&mut self, page_table: &mut PageTable, new_end: VirtPageNum) {
