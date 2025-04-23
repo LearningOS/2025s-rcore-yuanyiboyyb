@@ -1,10 +1,10 @@
 //! Implementation of [`PageTableEntry`] and [`PageTable`].
 
-use super::{frame_alloc, FrameTracker, PhysPageNum, StepByOne, VirtAddr, VirtPageNum};
+
+use super::{frame_alloc, FrameTracker, PhysPageNum, StepByOne, VirtAddr, VirtPageNum,ppn_to_address};
 use alloc::vec;
 use alloc::vec::Vec;
 use bitflags::*;
-
 bitflags! {
     /// page table entry flags
     pub struct PTEFlags: u8 {
@@ -70,6 +70,10 @@ impl PageTableEntry {
     pub fn executable(&self) -> bool {
         (self.flags() & PTEFlags::X) != PTEFlags::empty()
     }
+    ///
+    pub fn is_u(&self) -> bool{
+        (self.flags() & PTEFlags::U) != PTEFlags::empty()
+    }
 }
 
 /// page table structure
@@ -95,6 +99,7 @@ impl PageTable {
             frames: Vec::new(),
         }
     }
+    ///mmap
     /// Find PageTableEntry by VirtPageNum, create a frame for a 4KB page table if not exist
     fn find_pte_create(&mut self, vpn: VirtPageNum) -> Option<&mut PageTableEntry> {
         let idxs = vpn.indexes();
@@ -116,7 +121,7 @@ impl PageTable {
         result
     }
     /// Find PageTableEntry by VirtPageNum
-    fn find_pte(&self, vpn: VirtPageNum) -> Option<&mut PageTableEntry> {
+    pub fn find_pte(&self, vpn: VirtPageNum) -> Option<&mut PageTableEntry> {
         let idxs = vpn.indexes();
         let mut ppn = self.root_ppn;
         let mut result: Option<&mut PageTableEntry> = None;
@@ -178,4 +183,40 @@ pub fn translated_byte_buffer(token: usize, ptr: *const u8, len: usize) -> Vec<&
         start = end_va.into();
     }
     v
+}
+/// translate user ptr to kernel ptr
+pub fn translate_ptr_user_kernel(token:usize,ptr: usize) -> (Option<*mut u8>,bool,bool){
+    let page_table = PageTable::from_token(token);
+    let start = ptr;
+    let start_va = VirtAddr::from(start);
+    let vpn = start_va.floor();
+    if let None = page_table.translate(vpn){
+        return (None,false,false)
+    }
+    let pte = page_table.translate(vpn).unwrap();
+    let is_u = pte.is_u();
+    let is_readable = pte.readable();
+    let is_writable = pte.writable();
+    let ppn = pte.ppn();
+    return (Some(ppn_to_address(ppn.into(), start_va.page_offset())),is_readable && is_u,is_writable && is_u)
+}
+///
+pub fn translate_timeptr(token:usize,ptr: usize)->Option<(*mut u8,*mut u8)>{
+    let page_table = PageTable::from_token(token);
+    let start = ptr;
+    let start_va = VirtAddr::from(start);
+    let end_va = VirtAddr::from(start+16 as usize);
+    if end_va.floor() != start_va.floor(){
+        let first_pte = page_table.translate(start_va.floor()).unwrap();
+        let end_pte= page_table.translate(end_va.floor()).unwrap();
+        let start_ppn = first_pte.ppn();
+        let end_ppn=end_pte.ppn();
+        Some((ppn_to_address(start_ppn.into(), start_va.page_offset()),ppn_to_address(end_ppn.into(), end_va.page_offset())))
+    }else{
+        let first_pte = page_table.translate(start_va.floor()).unwrap();
+        let start_ppn = first_pte.ppn();
+        Some((ppn_to_address(start_ppn.into(), start_va.page_offset()),unsafe {
+            ppn_to_address(start_ppn.into(), start_va.page_offset()).add(8)
+        }))
+    }
 }

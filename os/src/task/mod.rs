@@ -17,6 +17,8 @@ mod task;
 use crate::loader::{get_app_data, get_num_app};
 use crate::sync::UPSafeCell;
 use crate::trap::TrapContext;
+use crate::syscall::{SYSCALL_WRITE,SYSCALL_EXIT,SYSCALL_YIELD,SYSCALL_GET_TIME,SYSCALL_SBRK,SYSCALL_MUNMAP,SYSCALL_MMAP,SYSCALL_TRACE};
+use crate::mm;
 use alloc::vec::Vec;
 use lazy_static::*;
 use switch::__switch;
@@ -153,8 +155,83 @@ impl TaskManager {
             panic!("All applications completed!");
         }
     }
-}
+    ///get the current syscall count
+    pub fn find_current_task_sysc(&self,id:usize)-> Option<isize>{
+        let inner = self.inner.exclusive_access();
+        let block = &inner.tasks[inner.current_task];
+        match id{
+            SYSCALL_WRITE=> Some(block.syscall_count[0]),
+            SYSCALL_EXIT=> Some(block.syscall_count[1]),
+            SYSCALL_YIELD=> Some(block.syscall_count[2]),
+            SYSCALL_GET_TIME=> Some(block.syscall_count[3]),
+            SYSCALL_SBRK=> Some(block.syscall_count[4]),
+            SYSCALL_MUNMAP=> Some(block.syscall_count[5]), 
+            SYSCALL_MMAP=> Some(block.syscall_count[6]),
+            SYSCALL_TRACE=> Some(block.syscall_count[7]),
+            _ => None,
+        }
+    }
+    ///
+    pub fn mmap(&self,start:usize,len:usize,prot:usize) -> isize{
+        let mut inner = self.inner.exclusive_access();
+        let current_task = inner.current_task;
+        let block = &mut inner.tasks[current_task];
+        let  memory_set: &mut mm::MemorySet = &mut block.memory_set;       
+        let start_va = mm::VirtAddr::from(start);
+        if !start_va.aligned() {
+            return -1
+        }
+        if prot & !0x7 != 0 || prot & 0x7 == 0 {
+            return -1
+        }
+        let end_va = mm::VirtAddr::from(start+len);
+        for i in start_va.floor().0..end_va.ceil().0{
+            if memory_set.find_is(i.into()){
+                return -1
+            }
+        }
+        memory_set.insert_framed_area(start_va, end_va,  mm::MapPermission::from_bits_truncate((prot << 1) as u8)| mm::MapPermission::U);
+        0
+    }
+///
+    pub fn munmap(&self,start:usize,len:usize)->isize{
+        let mut inner = self.inner.exclusive_access();
+        let current_task = inner.current_task;
+        let block = &mut inner.tasks[current_task];
+        let  memory_set: &mut mm::MemorySet = &mut block.memory_set;       
+        let start_va = mm::VirtAddr::from(start);
+        if !start_va.aligned() {
+            return -1
+        }
+        let end_va = mm::VirtAddr::from(start+len);
+        for i in start_va.floor().0..end_va.ceil().0{
+            if !memory_set.find_is(i.into()){
+                return -1
+            }
+        }
+        memory_set.munmap( start_va.floor(), end_va.ceil());
+        0
+    }
 
+    ///W
+    pub fn add_syscall(&self,id:usize){
+        let mut inner = self.inner.exclusive_access(); // 获取对 inner 的独占访问
+        let current_task = inner.current_task;
+        let  block = inner.tasks.get_mut(current_task).unwrap();
+        match id {
+            SYSCALL_WRITE=>block.syscall_count[0]+=1,
+            SYSCALL_EXIT=>block.syscall_count[1]+=1,
+            SYSCALL_YIELD=>block.syscall_count[2]+=1,
+            SYSCALL_GET_TIME=>block.syscall_count[3]+=1,
+            SYSCALL_SBRK=>block.syscall_count[4]+=1,
+            SYSCALL_MUNMAP=>block.syscall_count[5]+=1,
+            SYSCALL_MMAP=>block.syscall_count[6]+=1,
+            SYSCALL_TRACE=>block.syscall_count[7]+=1,
+            _ => (),
+        };
+    }
+
+}
 /// Run the first task in task list.
 pub fn run_first_task() {
     TASK_MANAGER.run_first_task();

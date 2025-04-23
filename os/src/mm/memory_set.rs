@@ -40,6 +40,20 @@ pub struct MemorySet {
 }
 
 impl MemorySet {
+    ///
+    pub fn find_is(&self,vpn:VirtPageNum)->bool{
+        let pte = self.page_table.find_pte(vpn);
+        match pte{
+            None => false,
+            Some(pte)=>{
+                if pte.is_valid(){
+                    true
+                }else{
+                    false
+                }
+            }
+        }
+    }
     /// Create a new empty `MemorySet`.
     pub fn new_bare() -> Self {
         Self {
@@ -233,6 +247,21 @@ impl MemorySet {
     pub fn translate(&self, vpn: VirtPageNum) -> Option<PageTableEntry> {
         self.page_table.translate(vpn)
     }
+    ///
+    pub fn munmap(&mut self,start: VirtPageNum, end: VirtPageNum)->isize{
+        let page_table = &mut self.page_table;
+        if let  Some((index,area))= self
+            .areas
+            .iter_mut()
+            .enumerate()
+            .find(|(_,area)| area.vpn_range.get_start() == start && area.vpn_range.get_end() == end){
+                area.munmap(page_table);
+                self.areas.remove(index);
+                0
+        }else{
+            -1
+        }
+    }
     /// shrink the area to new_end
     #[allow(unused)]
     pub fn shrink_to(&mut self, start: VirtAddr, new_end: VirtAddr) -> bool {
@@ -319,6 +348,12 @@ impl MapArea {
         for vpn in self.vpn_range {
             self.unmap_one(page_table, vpn);
         }
+    }
+    ///
+    pub fn munmap(&mut self,page_table: &mut PageTable){
+        for  vpn in VPNRange::new(self.vpn_range.get_start(),self.vpn_range.get_end()){
+            self.unmap_one(page_table,vpn);
+        } 
     }
     #[allow(unused)]
     pub fn shrink_to(&mut self, page_table: &mut PageTable, new_end: VirtPageNum) {
