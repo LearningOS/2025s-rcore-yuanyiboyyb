@@ -1,5 +1,6 @@
 //!Implementation of [`TaskManager`]
-use super::task::BIG_STRIDE;
+use core::isize;
+
 use super::TaskControlBlock;
 use crate::sync::UPSafeCell;
 use alloc::sync::Arc;
@@ -25,24 +26,22 @@ impl TaskManager {
     /// Take a process out of the ready queue
     pub fn fetch(&mut self) -> Option<Arc<TaskControlBlock>> {
         let mut min_index: Option<usize> = None;
-        let mut min_boot = 0; 
+        let mut min_boot = isize::MAX; 
 
         for (index, person) in self.ready_queue.iter().enumerate() {
-            if person.boot < min_boot {
+            if person.boot.show() < min_boot {
                 min_index = Some(index);
-                min_boot = person.boot;
+                min_boot = person.boot.show();
             }
         }
 
-        // 如果找到最小值，删除并返回对应的 TaskControlBlock
         if let Some(index) = min_index {
-            if let Some(task) = Arc::get_mut(&mut self.ready_queue[index]){
-                task.boot+=task.priority;
-            }else{
-                unreachable!();
-            }
+            let mut temp  = self.ready_queue[index].boot.exclusive_access();
+            *temp+=self.ready_queue[index].priority.show();
+            drop(temp);
             Some(self.ready_queue.remove(index))
         } else {
+            println!("------------");
             None
         }
     }

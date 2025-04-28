@@ -47,12 +47,6 @@ impl Processor {
         self.current.as_ref().map(Arc::clone)
     }
     ///
-    pub fn current_mut(&mut self) -> Option<&mut TaskControlBlock> {
-        self.current.as_mut().map(|arc| {
-            Arc::get_mut(arc).expect("Cannot get mutable reference to Arc")
-        })
-    }
-    ///
     pub fn mmap(&self,start:usize,len:usize,prot:usize) -> isize{
         if let Some(controlblock) = self.current(){
             let mut inner = controlblock.inner_exclusive_access();
@@ -100,12 +94,13 @@ impl Processor {
     }    
     ///
     pub fn set_priority(&mut self,target:isize) -> isize{
-        if target < 2 || target > BIG_STRIDE{
+        if target < 2 {
             return -1;
         } 
-        if let Some(controlblock) = self.current_mut(){
-            controlblock.priority = BIG_STRIDE/target;
-            0
+        if let Some(controlblock) = self.current(){
+            let mut temp = controlblock.priority.exclusive_access();
+            *temp = BIG_STRIDE/target;
+            target
         }else{
             unreachable!("there should be one process running");
         }
