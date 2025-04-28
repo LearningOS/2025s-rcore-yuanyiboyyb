@@ -1,12 +1,13 @@
 //!Implementation of [`TaskManager`]
+use super::task::BIG_STRIDE;
 use super::TaskControlBlock;
 use crate::sync::UPSafeCell;
-use alloc::collections::VecDeque;
 use alloc::sync::Arc;
+use alloc::vec::Vec;
 use lazy_static::*;
 ///A array of `TaskControlBlock` that is thread-safe
 pub struct TaskManager {
-    ready_queue: VecDeque<Arc<TaskControlBlock>>,
+    ready_queue: Vec<Arc<TaskControlBlock>>,
 }
 
 /// A simple FIFO scheduler.
@@ -14,16 +15,36 @@ impl TaskManager {
     ///Creat an empty TaskManager
     pub fn new() -> Self {
         Self {
-            ready_queue: VecDeque::new(),
+            ready_queue: Vec::new(),
         }
     }
     /// Add process back to ready queue
     pub fn add(&mut self, task: Arc<TaskControlBlock>) {
-        self.ready_queue.push_back(task);
+        self.ready_queue.push(task);
     }
     /// Take a process out of the ready queue
     pub fn fetch(&mut self) -> Option<Arc<TaskControlBlock>> {
-        self.ready_queue.pop_front()
+        let mut min_index: Option<usize> = None;
+        let mut min_boot = 0; 
+
+        for (index, person) in self.ready_queue.iter().enumerate() {
+            if person.boot < min_boot {
+                min_index = Some(index);
+                min_boot = person.boot;
+            }
+        }
+
+        // 如果找到最小值，删除并返回对应的 TaskControlBlock
+        if let Some(index) = min_index {
+            if let Some(task) = Arc::get_mut(&mut self.ready_queue[index]){
+                task.boot+=task.priority;
+            }else{
+                unreachable!();
+            }
+            Some(self.ready_queue.remove(index))
+        } else {
+            None
+        }
     }
 }
 
