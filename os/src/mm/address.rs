@@ -271,3 +271,8 @@ where
 }
 /// a simple range structure for virtual page number
 pub type VPNRange = SimpleRange<VirtPageNum>;
+///get ptr from oon and offset
+pub fn ppn_to_address(ppn: usize, offset: usize) -> *mut u8 {
+    let address = (ppn * PAGE_SIZE) + offset;
+    address as *mut u8
+}

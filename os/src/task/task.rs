@@ -8,6 +8,9 @@ use crate::trap::{trap_handler, TrapContext};
 use alloc::sync::{Arc, Weak};
 use alloc::vec::Vec;
 use core::cell::RefMut;
+const BIG_STRIDE: usize = 65536;
+const DEFAULT_PRIORITY:usize = 32;
+
 
 /// Task control block structure
 ///
@@ -19,6 +22,9 @@ pub struct TaskControlBlock {
 
     /// Kernel stack corresponding to PID
     pub kernel_stack: KernelStack,
+
+    ///priority 
+    pub priority:usize,
 
     /// Mutable
     inner: UPSafeCell<TaskControlBlockInner>,
@@ -106,6 +112,7 @@ impl TaskControlBlock {
         let task_control_block = Self {
             pid: pid_handle,
             kernel_stack,
+            priority:BIG_STRIDE/DEFAULT_PRIORITY,
             inner: unsafe {
                 UPSafeCell::new(TaskControlBlockInner {
                     trap_cx_ppn,
@@ -132,7 +139,10 @@ impl TaskControlBlock {
         );
         task_control_block
     }
-
+    /// set priority
+    pub fn set_priority(&mut self,target:usize){
+        self.priority = BIG_STRIDE /target;
+    }
     /// Load a new elf to replace the original application address space and start execution
     pub fn exec(&self, elf_data: &[u8]) {
         // memory_set with elf program headers/trampoline/trap context/user stack
@@ -175,6 +185,7 @@ impl TaskControlBlock {
         let task_control_block = Arc::new(TaskControlBlock {
             pid: pid_handle,
             kernel_stack,
+            priority:BIG_STRIDE/DEFAULT_PRIORITY,
             inner: unsafe {
                 UPSafeCell::new(TaskControlBlockInner {
                     trap_cx_ppn,
@@ -221,6 +232,7 @@ impl TaskControlBlock {
         let task_control_block = Arc::new(TaskControlBlock {
             pid: pid_handle,
             kernel_stack,
+            priority:BIG_STRIDE/DEFAULT_PRIORITY,
             inner: unsafe {
                 UPSafeCell::new(TaskControlBlockInner {
                     trap_cx_ppn,

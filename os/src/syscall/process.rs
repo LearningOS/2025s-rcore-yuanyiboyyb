@@ -1,6 +1,7 @@
 //! Process management syscalls
 use alloc::sync::Arc;
-
+use crate::timer::get_time_us;
+use crate::mm::translate_timeptr;
 use crate::{
     loader::get_app_data_by_name,
     mm::{translated_refmut, translated_str},
@@ -105,12 +106,18 @@ pub fn sys_waitpid(pid: isize, exit_code_ptr: *mut i32) -> isize {
 /// YOUR JOB: get time with second and microsecond
 /// HINT: You might reimplement it with virtual memory management.
 /// HINT: What if [`TimeVal`] is splitted by two pages ?
-pub fn sys_get_time(_ts: *mut TimeVal, _tz: usize) -> isize {
+pub fn sys_get_time(ts: *mut TimeVal, _tz: usize) -> isize {
     trace!(
         "kernel:pid[{}] sys_get_time NOT IMPLEMENTED",
         current_task().unwrap().pid.0
     );
-    -1
+    let us = get_time_us();
+    let (first,second) = translate_timeptr(current_user_token(),ts as usize).unwrap();
+    unsafe {
+        *(first as *mut usize) = us / 1_000_000;
+        *(second as *mut usize) =us % 1_000_000;
+    }
+0
 }
 
 /// YOUR JOB: Implement mmap.
