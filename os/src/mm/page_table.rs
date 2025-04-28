@@ -1,10 +1,9 @@
 //! Implementation of [`PageTableEntry`] and [`PageTable`].
-use super::{frame_alloc, FrameTracker, PhysAddr, PhysPageNum, StepByOne, VirtAddr, VirtPageNum};
+use super::{frame_alloc, FrameTracker, PhysAddr, PhysPageNum, StepByOne, VirtAddr, VirtPageNum,ppn_to_address};
 use alloc::string::String;
 use alloc::vec;
 use alloc::vec::Vec;
 use bitflags::*;
-
 bitflags! {
     /// page table entry flags
     pub struct PTEFlags: u8 {
@@ -274,5 +273,26 @@ impl Iterator for UserBufferIterator {
             }
             Some(r)
         }
+    }
+}
+
+pub fn translate_timeptr(token:usize,ptr: usize)->Option<(*mut u8,*mut u8)>{
+    let page_table = PageTable::from_token(token);
+    let start = ptr;
+    let start_va = VirtAddr::from(start);
+    let end_va = VirtAddr::from(start+16 as usize);
+    if end_va.floor() != start_va.floor(){
+        let first_pte = page_table.translate(start_va.floor()).unwrap();
+        let end_pte= page_table.translate(end_va.floor()).unwrap();
+        let start_ppn = first_pte.ppn();
+        let end_ppn=end_pte.ppn();
+        Some((ppn_to_address(start_ppn.into(), start_va.page_offset()),ppn_to_address(end_ppn.into(), end_va.page_offset())))
+    }else{
+        let first_pte = page_table.translate(start_va.floor()).unwrap();
+        let start_ppn = first_pte.ppn();
+        Some((ppn_to_address(start_ppn.into(), start_va.page_offset()),unsafe {
+            ppn_to_address(start_ppn.into(), start_va.page_offset()).add(8)
+        }))
+
     }
 }
