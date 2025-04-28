@@ -10,8 +10,8 @@ use alloc::sync::{Arc, Weak};
 use alloc::vec;
 use alloc::vec::Vec;
 use core::cell::RefMut;
-const BIG_STRIDE: usize = 65536;
-const DEFAULT_PRIORITY:usize = 32;
+pub const BIG_STRIDE: isize = 65536;
+const DEFAULT_PRIORITY:isize = 32;
 
 
 /// Task control block structure
@@ -26,7 +26,9 @@ pub struct TaskControlBlock {
     pub kernel_stack: KernelStack,
 
     ///priority 
-    pub priority:usize,
+    pub priority:isize,
+    ///
+    pub boot:isize,
 
     /// Mutable
     inner: UPSafeCell<TaskControlBlockInner>,
@@ -122,6 +124,7 @@ impl TaskControlBlock {
             pid: pid_handle,
             kernel_stack,
             priority:BIG_STRIDE/DEFAULT_PRIORITY,
+            boot:0,
             inner: unsafe {
                 UPSafeCell::new(TaskControlBlockInner {
                     trap_cx_ppn,
@@ -157,7 +160,7 @@ impl TaskControlBlock {
         task_control_block
     }
     /// set priority
-    pub fn set_priority(&mut self,target:usize){
+    pub fn set_priority(&mut self,target:isize){
         self.priority = BIG_STRIDE /target;
     }
     /// Load a new elf to replace the original application address space and start execution
@@ -201,6 +204,7 @@ impl TaskControlBlock {
             pid: pid_handle,
             kernel_stack,
             priority:BIG_STRIDE/DEFAULT_PRIORITY,
+            boot:0,
             inner: unsafe {
                 UPSafeCell::new(TaskControlBlockInner {
                     trap_cx_ppn,
@@ -257,6 +261,7 @@ impl TaskControlBlock {
             pid: pid_handle,
             kernel_stack,
             priority:BIG_STRIDE/DEFAULT_PRIORITY,
+            boot:0,
             inner: unsafe {
                 UPSafeCell::new(TaskControlBlockInner {
                     trap_cx_ppn,
