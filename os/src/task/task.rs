@@ -26,9 +26,9 @@ pub struct TaskControlBlock {
     pub kernel_stack: KernelStack,
 
     ///priority 
-    pub priority:isize,
+    pub priority:UPSafeCell<isize>,
     ///
-    pub boot:isize,
+    pub boot:UPSafeCell<isize>,
 
     /// Mutable
     inner: UPSafeCell<TaskControlBlockInner>,
@@ -123,8 +123,8 @@ impl TaskControlBlock {
         let task_control_block = Self {
             pid: pid_handle,
             kernel_stack,
-            priority:BIG_STRIDE/DEFAULT_PRIORITY,
-            boot:0,
+            priority:unsafe {UPSafeCell::new(BIG_STRIDE/DEFAULT_PRIORITY)},
+            boot:unsafe {UPSafeCell::new(0)},
             inner: unsafe {
                 UPSafeCell::new(TaskControlBlockInner {
                     trap_cx_ppn,
@@ -161,7 +161,8 @@ impl TaskControlBlock {
     }
     /// set priority
     pub fn set_priority(&mut self,target:isize){
-        self.priority = BIG_STRIDE /target;
+        let mut priority = self.priority.exclusive_access();
+        *priority =  BIG_STRIDE /target;
     }
     /// Load a new elf to replace the original application address space and start execution
     pub fn exec(&self, elf_data: &[u8]) {
@@ -203,8 +204,8 @@ impl TaskControlBlock {
         let task_control_block = Arc::new(TaskControlBlock {
             pid: pid_handle,
             kernel_stack,
-            priority:BIG_STRIDE/DEFAULT_PRIORITY,
-            boot:0,
+            priority:unsafe {UPSafeCell::new(BIG_STRIDE/DEFAULT_PRIORITY)},
+            boot:unsafe {UPSafeCell::new(0)},
             inner: unsafe {
                 UPSafeCell::new(TaskControlBlockInner {
                     trap_cx_ppn,
@@ -260,8 +261,8 @@ impl TaskControlBlock {
         let task_control_block = Arc::new(TaskControlBlock {
             pid: pid_handle,
             kernel_stack,
-            priority:BIG_STRIDE/DEFAULT_PRIORITY,
-            boot:0,
+            priority:unsafe {UPSafeCell::new(BIG_STRIDE/DEFAULT_PRIORITY)},
+            boot:unsafe {UPSafeCell::new(0)},
             inner: unsafe {
                 UPSafeCell::new(TaskControlBlockInner {
                     trap_cx_ppn,
