@@ -9,6 +9,7 @@ use super::{fetch_task, TaskStatus};
 use super::{TaskContext, TaskControlBlock};
 use crate::sync::UPSafeCell;
 use crate::trap::TrapContext;
+use crate::mm;
 use alloc::sync::Arc;
 use lazy_static::*;
 
@@ -44,6 +45,52 @@ impl Processor {
     pub fn current(&self) -> Option<Arc<TaskControlBlock>> {
         self.current.as_ref().map(Arc::clone)
     }
+    ///
+    pub fn mmap(&self,start:usize,len:usize,prot:usize) -> isize{
+        if let Some(controlblock) = self.current(){
+            let mut inner = controlblock.inner_exclusive_access();
+            let  memory_set: &mut mm::MemorySet = &mut inner.memory_set;       
+            let start_va = mm::VirtAddr::from(start);
+            if !start_va.aligned() {
+                return -1
+            }
+            if prot & !0x7 != 0 || prot & 0x7 == 0 {
+                return -1
+            }
+            let end_va = mm::VirtAddr::from(start+len);
+            for i in start_va.floor().0..end_va.ceil().0{
+                if memory_set.find_is(i.into()){
+                    return -1
+                }
+            }
+            memory_set.insert_framed_area(start_va, end_va,  mm::MapPermission::from_bits_truncate((prot << 1) as u8)| mm::MapPermission::U);
+            0
+        }else{
+            unreachable!("there should be one process running");
+        }
+     
+    }
+///
+    pub fn munmap(&self,start:usize,len:usize)->isize{
+        if let Some(controlblock) = self.current(){
+            let mut inner = controlblock.inner_exclusive_access();
+            let  memory_set: &mut mm::MemorySet = &mut inner.memory_set;        
+            let start_va = mm::VirtAddr::from(start);
+            if !start_va.aligned() {
+                return -1
+            }
+            let end_va = mm::VirtAddr::from(start+len);
+            for i in start_va.floor().0..end_va.ceil().0{
+                if !memory_set.find_is(i.into()){
+                    return -1
+                }
+            }
+            memory_set.munmap( start_va.floor(), end_va.ceil());
+            0
+        }else{
+            unreachable!("there should be one process running");
+        }
+    }    
 }
 
 lazy_static! {

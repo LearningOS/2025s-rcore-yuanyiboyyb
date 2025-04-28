@@ -37,6 +37,35 @@ pub struct MemorySet {
 }
 
 impl MemorySet {
+    ///
+    pub fn munmap(&mut self,start: VirtPageNum, end: VirtPageNum)->isize{
+        let page_table = &mut self.page_table;
+        if let  Some((index,area))= self
+            .areas
+            .iter_mut()
+            .enumerate()
+            .find(|(_,area)| area.vpn_range.get_start() == start && area.vpn_range.get_end() == end){
+                area.unmap(page_table);
+                self.areas.remove(index);
+                0
+        }else{
+            -1
+        }
+    }
+    ///
+    pub fn find_is(&self,vpn:VirtPageNum)->bool{
+        let pte = self.page_table.find_pte(vpn);
+        match pte{
+            None => false,
+            Some(pte)=>{
+                if pte.is_valid(){
+                    true
+                }else{
+                    false
+                }
+            }
+        }
+    }
     /// Create a new empty `MemorySet`.
     pub fn new_bare() -> Self {
         Self {
