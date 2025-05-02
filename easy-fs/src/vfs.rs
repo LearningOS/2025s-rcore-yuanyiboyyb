@@ -63,17 +63,18 @@ impl Inode {
         None
     }
     /// delete inode entry
-    fn delete_inode_enrty(&self, name: &str, disk_inode: &DiskInode){
+    fn delete_inode_enrty(&self, name: &str, disk_inode: &mut DiskInode){
         assert!(disk_inode.is_dir());
         let file_count = (disk_inode.size as usize) / DIRENT_SZ;
         let mut dirent = DirEntry::empty();
         for i in 0..file_count {
             assert_eq!(
-                disk_inode.read_at(DIRENT_SZ * i, dirent.as_bytes_mut(), &self.block_device,),
+                disk_inode.read_at(DIRENT_SZ * i, dirent.as_bytes_mut(), &self.block_device),
                 DIRENT_SZ,
             );
             if dirent.name() == name {
                 dirent.clear_name();
+                disk_inode.write_at(DIRENT_SZ * i, dirent.as_bytes_mut(), &self.block_device);
             }
         }
         

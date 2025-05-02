@@ -4,7 +4,9 @@ use std::fs::{read_dir, File, OpenOptions};
 use std::io::{Read, Seek, SeekFrom, Write};
 use std::sync::Arc;
 use std::sync::Mutex;
-pub const BLOCK_SZ: usize = 512;
+
+const BLOCK_SZ: usize = 512;
+
 struct BlockFile(Mutex<File>);
 
 impl BlockDevice for BlockFile {
