@@ -163,8 +163,6 @@ pub fn sys_spawn(path: *const u8) -> isize {
         let all_data = app_inode.read_all();
         let new_task = current_task.spawn(all_data.as_slice());
         let new_pid = new_task.pid.0;
-        let trap_cx = new_task.inner_exclusive_access().get_trap_cx();
-        trap_cx.x[10] = 0;
         add_task(new_task);
         new_pid as isize
     } else {

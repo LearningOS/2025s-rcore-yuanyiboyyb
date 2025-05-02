@@ -4,6 +4,7 @@ use alloc::string::String;
 use alloc::vec;
 use alloc::vec::Vec;
 use bitflags::*;
+use core::ptr;
 bitflags! {
     /// page table entry flags
     pub struct PTEFlags: u8 {
@@ -156,7 +157,6 @@ impl PageTable {
         8usize << 60 | self.root_ppn.0
     }
 }
-
 /// Translate&Copy a ptr[u8] array with LENGTH len to a mutable u8 Vec through page table
 pub fn translated_byte_buffer(token: usize, ptr: *const u8, len: usize) -> Vec<&'static mut [u8]> {
     let page_table = PageTable::from_token(token);
@@ -294,5 +294,44 @@ pub fn translate_timeptr(token:usize,ptr: usize)->Option<(*mut u8,*mut u8)>{
             ppn_to_address(start_ppn.into(), start_va.page_offset()).add(8)
         }))
 
+    }
+}
+///
+pub fn read_struct<T>(token: usize, src_ptr: *const u8) -> Option<T>
+where
+    T: Sized,
+{
+    unsafe {
+        let len = core::mem::size_of::<T>();
+        let byte_slices = translated_byte_buffer(token, src_ptr, len);
+
+        let mut dest = core::mem::MaybeUninit::<T>::uninit();
+        let dest_ptr = dest.as_mut_ptr() as *mut u8;
+
+        let mut offset = 0;
+        for slice in byte_slices {
+            ptr::copy_nonoverlapping(slice.as_ptr(), dest_ptr.add(offset), slice.len());
+            offset += slice.len();
+        }
+        Some(dest.assume_init())
+    }
+}
+
+///
+pub fn write_struct<T>(token: usize, dest_ptr: *mut u8, src: &T)
+where
+    T: Sized,
+{
+    unsafe {
+        let len = core::mem::size_of::<T>();
+        let byte_slices = translated_byte_buffer(token, dest_ptr, len);
+
+        let src_ptr = src as *const T as *const u8;
+
+        let mut offset = 0;
+        for slice in byte_slices {
+            ptr::copy_nonoverlapping(src_ptr.add(offset), slice.as_mut_ptr(), slice.len());
+            offset += slice.len();
+        }
     }
 }
