@@ -30,7 +30,7 @@ impl TaskControlBlock {
     }
 }
 
-pub struct TaskControlBlockInner {
+pub struct   TaskControlBlockInner {
     pub res: Option<TaskUserRes>,
     /// The physical page number of the frame where the trap context is placed
     pub trap_cx_ppn: PhysPageNum,
@@ -56,7 +56,7 @@ impl TaskControlBlockInner {
 
 impl TaskControlBlock {
     /// Create a new task
-    pub fn new(
+    pub fn  new(
         process: Arc<ProcessControlBlock>,
         ustack_base: usize,
         alloc_user_res: bool,

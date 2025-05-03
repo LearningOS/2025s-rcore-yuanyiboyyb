@@ -7,7 +7,7 @@ use super::{add_task, SignalFlags};
 use super::{pid_alloc, PidHandle};
 use crate::fs::{File, Stdin, Stdout};
 use crate::mm::{translated_refmut, MemorySet, KERNEL_SPACE};
-use crate::sync::{Condvar, Mutex, Semaphore, UPSafeCell};
+use crate::sync::{Condvar, Mutex, Semaphore, UPSafeCell,DetectInformation};
 use crate::trap::{trap_handler, TrapContext};
 use alloc::string::String;
 use alloc::sync::{Arc, Weak};
@@ -49,9 +49,32 @@ pub struct ProcessControlBlockInner {
     pub semaphore_list: Vec<Option<Arc<Semaphore>>>,
     /// condvar list
     pub condvar_list: Vec<Option<Arc<Condvar>>>,
+
+    pub mutex_deadlock_detect:Option<DetectInformation>,
+
+    pub sem_deadlock_detect:Option<DetectInformation>,
 }
 
 impl ProcessControlBlockInner {
+    ///
+    pub fn set_deteck(&mut self,enable:usize)->isize{
+        match enable{
+            0 =>{
+                self.mutex_deadlock_detect =Some(DetectInformation::new());
+                self.sem_deadlock_detect = Some(DetectInformation::new());
+                0
+            }
+            1=>{
+                self.mutex_deadlock_detect =Some(DetectInformation::new());
+                self.sem_deadlock_detect = Some(DetectInformation::new());
+                0
+            }
+            _=>{
+                -1
+            }
+        }
+        
+    }
     #[allow(unused)]
     /// get the address of app's page table
     pub fn get_user_token(&self) -> usize {
@@ -119,6 +142,8 @@ impl ProcessControlBlock {
                     mutex_list: Vec::new(),
                     semaphore_list: Vec::new(),
                     condvar_list: Vec::new(),
+                    mutex_deadlock_detect:None,
+                    sem_deadlock_detect:None,
                 })
             },
         });
@@ -245,6 +270,8 @@ impl ProcessControlBlock {
                     mutex_list: Vec::new(),
                     semaphore_list: Vec::new(),
                     condvar_list: Vec::new(),
+                    mutex_deadlock_detect:None,
+                    sem_deadlock_detect:None,
                 })
             },
         });

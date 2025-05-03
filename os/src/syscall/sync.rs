@@ -49,9 +49,16 @@ pub fn sys_mutex_create(blocking: bool) -> isize {
         .map(|(id, _)| id)
     {
         process_inner.mutex_list[id] = mutex;
+        if let Some(detect) = process_inner.mutex_deadlock_detect.as_mut() {
+            detect.add(1, id);
+        }
         id as isize
     } else {
         process_inner.mutex_list.push(mutex);
+        let len = process_inner.mutex_list.len()  - 1;
+        if let Some(detect) = process_inner.mutex_deadlock_detect.as_mut() {
+            detect.add(1,  len);
+        }
         process_inner.mutex_list.len() as isize - 1
     }
 }
@@ -69,8 +76,16 @@ pub fn sys_mutex_lock(mutex_id: usize) -> isize {
             .tid
     );
     let process = current_process();
-    let process_inner = process.inner_exclusive_access();
+    let mut process_inner = process.inner_exclusive_access();
     let mutex = Arc::clone(process_inner.mutex_list[mutex_id].as_ref().unwrap());
+    if let Some(detect) = process_inner.mutex_deadlock_detect.as_mut() {
+        match detect.get_detect(mutex_id, 1){
+            true => {},
+            false =>{
+                return  -0xDEAD;
+            }
+        }
+    }
     drop(process_inner);
     drop(process);
     mutex.lock();
@@ -90,8 +105,11 @@ pub fn sys_mutex_unlock(mutex_id: usize) -> isize {
             .tid
     );
     let process = current_process();
-    let process_inner = process.inner_exclusive_access();
+    let mut process_inner = process.inner_exclusive_access();
     let mutex = Arc::clone(process_inner.mutex_list[mutex_id].as_ref().unwrap());
+    if let Some(detect) = process_inner.sem_deadlock_detect.as_mut() {
+        detect.release(mutex_id, 1);
+    }
     drop(process_inner);
     drop(process);
     mutex.unlock();
@@ -119,9 +137,16 @@ pub fn sys_semaphore_create(res_count: usize) -> isize {
         .find(|(_, item)| item.is_none())
         .map(|(id, _)| id)
     {
+        if let Some(detect) = process_inner.sem_deadlock_detect.as_mut() {
+            detect.add(res_count,  id);
+        }
         process_inner.semaphore_list[id] = Some(Arc::new(Semaphore::new(res_count)));
         id
     } else {
+        let len = process_inner.mutex_list.len()  - 1;
+        if let Some(detect) = process_inner.sem_deadlock_detect.as_mut() {
+            detect.add(res_count,  len);
+        }
         process_inner
             .semaphore_list
             .push(Some(Arc::new(Semaphore::new(res_count))));
@@ -143,8 +168,11 @@ pub fn sys_semaphore_up(sem_id: usize) -> isize {
             .tid
     );
     let process = current_process();
-    let process_inner = process.inner_exclusive_access();
+    let mut process_inner = process.inner_exclusive_access();
     let sem = Arc::clone(process_inner.semaphore_list[sem_id].as_ref().unwrap());
+    if let Some(detect) = process_inner.sem_deadlock_detect.as_mut() {
+        detect.release(sem_id, 1);
+    }
     drop(process_inner);
     sem.up();
     0
@@ -163,8 +191,16 @@ pub fn sys_semaphore_down(sem_id: usize) -> isize {
             .tid
     );
     let process = current_process();
-    let process_inner = process.inner_exclusive_access();
+    let mut process_inner = process.inner_exclusive_access();
     let sem = Arc::clone(process_inner.semaphore_list[sem_id].as_ref().unwrap());
+    if let Some(detect) = process_inner.sem_deadlock_detect.as_mut() {
+        match detect.get_detect(sem_id, 1){
+            true => {},
+            false =>{
+                return  -0xDEAD;
+            }
+        }
+    }
     drop(process_inner);
     sem.down();
     0
@@ -245,7 +281,9 @@ pub fn sys_condvar_wait(condvar_id: usize, mutex_id: usize) -> isize {
 /// enable deadlock detection syscall
 ///
 /// YOUR JOB: Implement deadlock detection, but might not all in this syscall
-pub fn sys_enable_deadlock_detect(_enabled: usize) -> isize {
-    trace!("kernel: sys_enable_deadlock_detect NOT IMPLEMENTED");
-    -1
+pub fn sys_enable_deadlock_detect(enabled: usize) -> isize {
+    trace!("kernel: sys_enable_deadlock_detect");
+    let process = current_process();
+    let mut process_inner = process.inner_exclusive_access();
+    process_inner.set_deteck(enabled)
 }
