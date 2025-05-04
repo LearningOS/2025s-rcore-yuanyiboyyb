@@ -60,13 +60,13 @@ impl ProcessControlBlockInner {
     pub fn set_deteck(&mut self,enable:usize)->isize{
         match enable{
             0 =>{
-                self.mutex_deadlock_detect =Some(DetectInformation::new());
-                self.sem_deadlock_detect = Some(DetectInformation::new());
+                self.mutex_deadlock_detect = None;
+                self.sem_deadlock_detect = None;
                 0
             }
             1=>{
-                self.mutex_deadlock_detect =Some(DetectInformation::new());
-                self.sem_deadlock_detect = Some(DetectInformation::new());
+                self.mutex_deadlock_detect =Some(DetectInformation::new(false));
+                self.sem_deadlock_detect = Some(DetectInformation::new(true));
                 0
             }
             _=>{

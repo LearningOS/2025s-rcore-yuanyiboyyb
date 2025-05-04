@@ -35,6 +35,12 @@ pub fn sys_thread_create(entry: usize, arg: usize) -> isize {
     let new_task_res = new_task_inner.res.as_ref().unwrap();
     let new_task_tid = new_task_res.tid;
     let mut process_inner = process.inner_exclusive_access();
+    if let Some(detect) = process_inner.sem_deadlock_detect.as_mut(){
+        detect.addtid(new_task_tid);
+    }
+    if let Some(detect) = process_inner.mutex_deadlock_detect.as_mut(){
+        detect.addtid(new_task_tid);
+    }
     // add new thread to current process
     let tasks = &mut process_inner.tasks;
     while tasks.len() < new_task_tid + 1 {
