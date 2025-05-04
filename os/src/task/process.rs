@@ -234,7 +234,105 @@ impl ProcessControlBlock {
         trap_cx.x[11] = argv_base;
         *task_inner.get_trap_cx() = trap_cx;
     }
-
+    ///
+    pub fn spawn(self: &Arc<Self>, elf_data: &[u8])-> Arc<Self> {
+        let mut parent = self.inner_exclusive_access();
+        let pid = pid_alloc();
+        let fd_table:Vec<Option<Arc<dyn File + Send + Sync>>> = vec![
+            // 0 -> stdin
+            Some(Arc::new(Stdin)),
+            // 1 -> stdout
+            Some(Arc::new(Stdout)),
+            // 2 -> stderr
+            Some(Arc::new(Stdout)),
+        ];
+        let (memory_set, ustack_base, entry_point) = MemorySet::from_elf(elf_data);
+        let new_token = memory_set.token();
+        let child = Arc::new(Self {
+            pid,
+            inner: unsafe {
+                UPSafeCell::new(ProcessControlBlockInner {
+                    is_zombie: false,
+                    memory_set,
+                    parent: Some(Arc::downgrade(self)),
+                    children: Vec::new(),
+                    exit_code: 0,
+                    fd_table: fd_table,
+                    signals: SignalFlags::empty(),
+                    tasks: Vec::new(),
+                    task_res_allocator: RecycleAllocator::new(),
+                    mutex_list: Vec::new(),
+                    semaphore_list: Vec::new(),
+                    condvar_list: Vec::new(),
+                    mutex_deadlock_detect:None,
+                    sem_deadlock_detect:None,
+                })
+            },
+        });
+        parent.children.push(Arc::clone(&child));
+        let task = Arc::new(TaskControlBlock::new(
+            Arc::clone(&child),
+            parent
+                .get_task(0)
+                .inner_exclusive_access()
+                .res
+                .as_ref()
+                .unwrap()
+                .ustack_base(),
+            false,
+        ));
+        let mut child_inner = child.inner_exclusive_access();
+        child_inner.tasks.push(Some(Arc::clone(&task)));
+        drop(child_inner);
+        let mut task_inner = task.inner_exclusive_access();
+        let trap_cx = task_inner.get_trap_cx();
+        trap_cx.kernel_sp = task.kstack.get_top();
+        task_inner.res.as_mut().unwrap().ustack_base = ustack_base;
+        task_inner.res.as_mut().unwrap().alloc_user_res();
+        task_inner.trap_cx_ppn = task_inner.res.as_mut().unwrap().trap_cx_ppn();
+        
+        let mut user_sp = task_inner.res.as_mut().unwrap().ustack_top();
+        let args:Vec<String> = vec![];
+        user_sp -= (args.len() + 1) * core::mem::size_of::<usize>();
+        let argv_base = user_sp;
+        let mut argv: Vec<_> = (0..=args.len())
+            .map(|arg| {
+                translated_refmut(
+                    new_token,
+                    (argv_base + arg * core::mem::size_of::<usize>()) as *mut usize,
+                )
+            })
+            .collect();
+        *argv[args.len()] = 0;
+        for i in 0..args.len() {
+            user_sp -= args[i].len() + 1;
+            *argv[i] = user_sp;
+            let mut p = user_sp;
+            for c in args[i].as_bytes() {
+                *translated_refmut(new_token, p as *mut u8) = *c;
+                p += 1;
+            }
+            *translated_refmut(new_token, p as *mut u8) = 0;
+        }
+        // make the user_sp aligned to 8B for k210 platform
+        user_sp -= user_sp % core::mem::size_of::<usize>();
+        // initialize trap_cx
+        trace!("kernel: exec .. initialize trap_cx");
+        let mut trap_cx = TrapContext::app_init_context(
+            entry_point,
+            user_sp,
+            KERNEL_SPACE.exclusive_access().token(),
+            task.kstack.get_top(),
+            trap_handler as usize,
+        );
+        trap_cx.x[10] = args.len();
+        trap_cx.x[11] = argv_base;
+        *task_inner.get_trap_cx() = trap_cx;
+        drop(task_inner);
+        insert_into_pid2process(child.getpid(), Arc::clone(&child));
+        add_task(task);
+        child
+    }
     /// Only support processes with a single thread.
     pub fn fork(self: &Arc<Self>) -> Arc<Self> {
         trace!("kernel: fork");

@@ -6,7 +6,8 @@ use crate::trap::TrapContext;
 use crate::{mm::PhysPageNum, sync::UPSafeCell};
 use alloc::sync::{Arc, Weak};
 use core::cell::RefMut;
-
+pub const BIG_STRIDE: isize = 65536;
+const DEFAULT_PRIORITY:isize = 32;
 /// Task control block structure
 pub struct TaskControlBlock {
     /// immutable
@@ -15,6 +16,10 @@ pub struct TaskControlBlock {
     pub kstack: KernelStack,
     /// mutable
     inner: UPSafeCell<TaskControlBlockInner>,
+    ///priority 
+    pub priority:UPSafeCell<isize>,
+    ///
+    pub boot:UPSafeCell<isize>,
 }
 
 impl TaskControlBlock {
@@ -66,6 +71,8 @@ impl TaskControlBlock {
         let kstack = kstack_alloc();
         let kstack_top = kstack.get_top();
         Self {
+            priority:unsafe {UPSafeCell::new(BIG_STRIDE/DEFAULT_PRIORITY)},
+            boot:unsafe {UPSafeCell::new(0)},
             process: Arc::downgrade(&process),
             kstack,
             inner: unsafe {

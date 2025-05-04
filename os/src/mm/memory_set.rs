@@ -84,6 +84,21 @@ impl MemorySet {
             }
         }
     }
+    ///
+    pub fn munmap(&mut self,start: VirtPageNum, end: VirtPageNum)->isize{
+        let page_table = &mut self.page_table;
+        if let  Some((index,area))= self
+            .areas
+            .iter_mut()
+            .enumerate()
+            .find(|(_,area)| area.vpn_range.get_start() == start && area.vpn_range.get_end() == end){
+                area.unmap(page_table);
+                self.areas.remove(index);
+                0
+        }else{
+            -1
+        }
+    }
     /// Add a new MapArea into this MemorySet.
     /// Assuming that there are no conflicts in the virtual address
     /// space.
@@ -225,6 +240,20 @@ impl MemorySet {
             user_stack_base,
             elf.header.pt2.entry_point() as usize,
         )
+    }
+     ///
+     pub fn find_is(&self,vpn:VirtPageNum)->bool{
+        let pte = self.page_table.find_pte(vpn);
+        match pte{
+            None => false,
+            Some(pte)=>{
+                if pte.is_valid(){
+                    true
+                }else{
+                    false
+                }
+            }
+        }
     }
     /// Create a new address space by copy code&data from a exited process's address space.
     pub fn from_existed_user(user_space: &Self) -> Self {
