@@ -1,4 +1,4 @@
-use super::File;
+use super::{File,StatMode};
 use crate::mm::UserBuffer;
 use crate::sbi::console_getchar;
 use crate::task::suspend_current_and_run_next;
@@ -10,6 +10,9 @@ pub struct Stdin;
 pub struct Stdout;
 
 impl File for Stdin {
+    fn read_stat(&self)->(u64,StatMode,u32){
+        return (0,StatMode::NULL,0)
+    }
     fn readable(&self) -> bool {
         true
     }
@@ -41,6 +44,9 @@ impl File for Stdin {
 }
 
 impl File for Stdout {
+    fn read_stat(&self)->(u64,StatMode,u32){
+        return (0,StatMode::NULL,0)
+    }
     fn readable(&self) -> bool {
         false
     }

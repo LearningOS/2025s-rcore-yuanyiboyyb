@@ -94,6 +94,8 @@ type DataBlock = [u8; BLOCK_SZ];
 pub struct DiskInode {
     /// file size
     pub size: u32,
+    ///
+    pub ref_count:u32,
     /// array of direct block id
     pub direct: [u32; INODE_DIRECT_COUNT],
     /// one-level indirect block id
@@ -448,5 +450,9 @@ impl DirEntry {
     /// get the inode id of the directory entry
     pub fn inode_id(&self) -> u32 {
         self.inode_id
+    }
+    ///clear name
+    pub fn clear_name(&mut self){
+        self.name.fill(0);
     }
 }

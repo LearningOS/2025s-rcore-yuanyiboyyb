@@ -1,4 +1,4 @@
-use super::File;
+use super::{File,StatMode};
 use crate::mm::UserBuffer;
 use crate::sync::UPSafeCell;
 use alloc::sync::{Arc, Weak};
@@ -115,6 +115,9 @@ impl File for Pipe {
     }
     fn writable(&self) -> bool {
         self.writable
+    }
+    fn read_stat(&self)->(u64,StatMode,u32){
+        return (0,StatMode::NULL,0)
     }
     fn read(&self, buf: UserBuffer) -> usize {
         trace!("kernel: Pipe::read");
